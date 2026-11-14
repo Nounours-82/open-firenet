@@ -147,7 +147,7 @@ def both_ways(what, in_code, in_spec):
 
 
 # Routes (captive portal probes and the page itself aside; /api/control is an alias of /api/controls).
-routes = set(re.findall(r'web\.on\("(/(?:api/[a-z_]+|log))"', ino)) - {"/api/control"}
+routes = set(re.findall(r'web\.on\("(/(?:api/[a-z0-9_]+|log))"', ino)) - {"/api/control"}
 both_ways("route", routes, SPEC["paths"])
 
 
@@ -166,6 +166,8 @@ sections = ino[ino.index("static String jsonStoveSections()"):ino.index("static 
 state_fn = ino[ino.index("static String jsonState()"):]
 device = state_fn[:state_fn.index("jsonStoveSections()")]
 fields = {**written_fields(sections), **written_fields(device)}
+# The hopper fields are assembled as a JSON fragment and interpolated into the sensors object.
+fields.setdefault("sensors", []).extend(re.findall(r'\\"(hopper_[a-z_]+)\\":', sections))
 for obj, schema in (("device", "Device"), ("stove", "Stove"), ("sensors", "Sensors"), ("controls", "ControlsState")):
     if obj not in fields:
         errors.append(f"{obj}: object not found in the firmware source (was the code reorganised?)")

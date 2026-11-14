@@ -883,6 +883,18 @@ input:checked + .slider-switch:before { transform: translateX(20px); background-
       </div>
     </div>
 
+    <div class="card card-gauge" data-card="hopper" id="hopperCard" style="display:none">
+      <div class="card-tools"></div>
+      <div class="card-header">
+        <span id="lblHopperHeader">Charge de la trémie</span>
+        <span class="ic-slot" data-ic="package"></span>
+      </div>
+      <div class="card-val">
+        <span id="hopperPercent">--</span><span class="unit">%</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="hopperBar" style="width:0%"></div></div>
+    </div>
+
     <div class="card" data-card="runtime">
       <div class="card-tools"></div>
       <div class="card-header">
@@ -1466,6 +1478,42 @@ input:checked + .slider-switch:before { transform: translateX(20px); background-
       </div>
       <div style="font-size:0.75rem;color:var(--text-dim)" id="lblTxGapHelp">Appliqué immédiatement et conservé après redémarrage. Trop bas : le poêle peut ne traiter qu'une trame sur deux.</div>
     </div>
+    <div class="card" style="gap:12px" id="hcsr04Card">
+      <h3 id="lblHcsrTitle">Capteur ultrason HC-SR04</h3>
+      <label style="display:flex;align-items:center;gap:8px;font-size:0.9rem;cursor:pointer">
+        <input type="checkbox" id="hcsrEnabled">
+        <span id="lblHcsrEnabled">Activer le HC-SR04</span>
+      </label>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <label style="flex:1;min-width:120px;display:flex;flex-direction:column;gap:4px;font-size:0.8rem;color:var(--text-dim)">
+          <span id="lblHcsrTrig">GPIO TRIG</span>
+          <input class="input-text" id="hcsrTrig" type="number" min="0" max="48" step="1">
+        </label>
+        <label style="flex:1;min-width:120px;display:flex;flex-direction:column;gap:4px;font-size:0.8rem;color:var(--text-dim)">
+          <span id="lblHcsrEcho">GPIO ECHO</span>
+          <input class="input-text" id="hcsrEcho" type="number" min="0" max="48" step="1">
+        </label>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <label style="flex:1;min-width:120px;display:flex;flex-direction:column;gap:4px;font-size:0.8rem;color:var(--text-dim)">
+          <span id="lblHcsrMin">Hauteur minimale (cm)</span>
+          <input class="input-text" id="hcsrMin" type="number" min="0" max="400" step="1">
+        </label>
+        <label style="flex:1;min-width:120px;display:flex;flex-direction:column;gap:4px;font-size:0.8rem;color:var(--text-dim)">
+          <span id="lblHcsrMax">Hauteur maximale (cm)</span>
+          <input class="input-text" id="hcsrMax" type="number" min="1" max="400" step="1">
+        </label>
+        <label style="flex:1;min-width:120px;display:flex;flex-direction:column;gap:4px;font-size:0.8rem;color:var(--text-dim)">
+          <span id="lblHcsrAlert">Seuil d'alerte (cm)</span>
+          <input class="input-text" id="hcsrAlert" type="number" min="0" max="400" step="1">
+        </label>
+      </div>
+      <div id="hcsrHelp" style="font-size:0.75rem;color:var(--text-dim)">La hauteur est calculée comme hauteur max moins la distance mesurée. La hauteur max correspond à la distance capteur-fond lorsque le réservoir est vide. Alerte sous le seuil.</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+        <div id="hcsrReading" style="font-size:0.9rem;color:var(--text-dim)">En attente de mesure…</div>
+        <button type="button" class="power-btn" id="btnSaveHcsr" style="padding:6px 16px;font-size:0.85rem" onclick="saveHcsr04()">Enregistrer</button>
+      </div>
+    </div>
     <div class="card" style="gap:12px" id="logSizeCard">
       <h3 id="lblLogSizeTitle"></h3>
       <p id="lblLogSizeDesc" style="font-size:0.85rem;color:var(--text-dim);margin:0"></p>
@@ -1834,6 +1882,27 @@ const I18N = {
     logSizeTitle: "Historique des échanges avec le poêle",
     logSizeDesc: "Garde les derniers messages échangés avec le poêle, pour le journal de la page Diagnostics et le fichier de diagnostic. 16 ko laissent plus de mémoire libre ; 32 ko gardent un historique deux fois plus long, utile pour chercher un problème. Pris en compte au prochain redémarrage.",
     logSizeSaved: "Enregistré ✓ — redémarrez la clé pour l'appliquer",
+    hopperHeader: "Charge de la trémie",
+    hcsrTitle: "Capteur ultrason HC-SR04",
+    hcsrEnabled: "Activer le HC-SR04",
+    hcsrTrig: "GPIO TRIG",
+    hcsrEcho: "GPIO ECHO",
+    hcsrMin: "Hauteur minimale (cm)",
+    hcsrMax: "Hauteur maximale (cm)",
+    hcsrAlert: "Seuil d'alerte (cm)",
+    hcsrHelp: "Hauteur = hauteur max moins la distance mesurée, limitée aux valeurs min/max. La hauteur max est la distance capteur-fond lorsque le réservoir est vide. Alerte sous le seuil. Protégez ECHO 5 V avec un diviseur/convertisseur; évitez GPIO19/20 (USB), et GPIO0-5/38 avec l'écran T-Dongle.",
+    hcsrWaiting: "En attente de mesure…",
+    hcsrDisabled: "Capteur désactivé",
+    hcsrNoEcho: "Aucune mesure valide (vérifiez le capteur et son câblage)",
+    hcsrLevel: "Hauteur",
+    hcsrDistance: "Distance",
+    hcsrAlertActive: "Alerte : seuil atteint",
+    hcsrNormal: "Niveau normal",
+    hcsrTaskError: "Tâche de mesure indisponible",
+    hcsrSave: "Enregistrer",
+    hcsrSaving: "Enregistrement…",
+    hcsrSaved: "Enregistré ✓",
+    hcsrSaveError: "Échec de l'enregistrement",
     accessTitle: "Accès à la page",
     accessDesc: "La clé répond à son adresse IP et à open-firenet.local. Si vous l'ouvrez sous un autre nom, par exemple celui que lui donne votre box, ajoutez-le ici. Elle ne répond jamais à une page d'un autre site web.",
     accessHosts: "Noms supplémentaires (un par ligne, 8 au plus)",
@@ -2188,6 +2257,27 @@ const I18N = {
     logSizeTitle: "History of the exchanges with the stove",
     logSizeDesc: "Keeps the latest messages exchanged with the stove, for the log of the Diagnostics tab and the diagnostic file. 16 kB leaves more memory free; 32 kB keeps twice as much history, useful when looking for a problem. Applied at the next restart.",
     logSizeSaved: "Saved ✓ - restart the bridge to apply it",
+    hopperHeader: "Hopper level",
+    hcsrTitle: "HC-SR04 ultrasonic sensor",
+    hcsrEnabled: "Enable HC-SR04",
+    hcsrTrig: "TRIG GPIO",
+    hcsrEcho: "ECHO GPIO",
+    hcsrMin: "Minimum height (cm)",
+    hcsrMax: "Maximum height (cm)",
+    hcsrAlert: "Alert threshold (cm)",
+    hcsrHelp: "Height = maximum height minus measured distance, clamped to min/max. Maximum height is the sensor-to-bottom distance when the container is empty. Alert at or below threshold. Level-shift the 5 V ECHO; avoid GPIO19/20 (USB), and GPIO0-5/38 with the T-Dongle display.",
+    hcsrWaiting: "Waiting for a measurement…",
+    hcsrDisabled: "Sensor disabled",
+    hcsrNoEcho: "No valid measurement (check the sensor and wiring)",
+    hcsrLevel: "Height",
+    hcsrDistance: "Distance",
+    hcsrAlertActive: "Alert: threshold reached",
+    hcsrNormal: "Level normal",
+    hcsrTaskError: "Measurement task unavailable",
+    hcsrSave: "Save",
+    hcsrSaving: "Saving…",
+    hcsrSaved: "Saved ✓",
+    hcsrSaveError: "Could not save",
     accessTitle: "Access to the page",
     accessDesc: "The bridge answers at its IP address and at open-firenet.local. If you open it under another name, for example the one your router gives it, add it here. It never answers a page of another website.",
     accessHosts: "Extra names (one per line, 8 at most)",
@@ -2550,6 +2640,27 @@ const I18N = {
     "logSizeTitle": "Cronologia degli scambi con la stufa",
     "logSizeDesc": "Conserva gli ultimi messaggi scambiati con la stufa, per il registro della scheda Diagnostica e il file di diagnostica. 16 kB lasciano più memoria libera; 32 kB conservano una cronologia doppia, utile per cercare un problema. Applicato al prossimo riavvio.",
     "logSizeSaved": "Salvato ✓ - riavvia il bridge per applicarlo",
+    "hopperHeader": "Livello del serbatoio",
+    "hcsrTitle": "Sensore a ultrasuoni HC-SR04",
+    "hcsrEnabled": "Attiva HC-SR04",
+    "hcsrTrig": "GPIO TRIG",
+    "hcsrEcho": "GPIO ECHO",
+    "hcsrMin": "Altezza minima (cm)",
+    "hcsrMax": "Altezza massima (cm)",
+    "hcsrAlert": "Soglia di allarme (cm)",
+    "hcsrHelp": "Altezza = altezza max meno distanza misurata, limitata ai valori min/max. L'altezza max è la distanza tra sensore e fondo con il serbatoio vuoto. Allarme alla soglia o sotto. Adattare ECHO a 3,3 V; evitare GPIO19/20 (USB) e GPIO0-5/38 con lo schermo T-Dongle.",
+    "hcsrWaiting": "In attesa di una misura…",
+    "hcsrDisabled": "Sensore disattivato",
+    "hcsrNoEcho": "Nessuna misura valida (controllare sensore e cablaggio)",
+    "hcsrLevel": "Altezza",
+    "hcsrDistance": "Distanza",
+    "hcsrAlertActive": "Allarme: soglia raggiunta",
+    "hcsrNormal": "Livello normale",
+    "hcsrTaskError": "Attività di misura non disponibile",
+    "hcsrSave": "Salva",
+    "hcsrSaving": "Salvataggio…",
+    "hcsrSaved": "Salvato ✓",
+    "hcsrSaveError": "Salvataggio non riuscito",
     "accessTitle": "Accesso alla pagina",
     "accessDesc": "Il bridge risponde al suo indirizzo IP e a open-firenet.local. Se lo apri con un altro nome, per esempio quello assegnato dal tuo router, aggiungilo qui. Non risponde mai a una pagina di un altro sito web.",
     "accessHosts": "Nomi aggiuntivi (uno per riga, al massimo 8)",
@@ -2956,6 +3067,27 @@ const I18N = {
     logSizeTitle: "Verlauf des Austauschs mit dem Ofen",
     logSizeDesc: "Speichert die letzten mit dem Ofen ausgetauschten Nachrichten, für das Protokoll im Diagnose-Tab und die Diagnosedatei. 16 kB lassen mehr Speicher frei; 32 kB speichern doppelt so viel Verlauf, nützlich bei der Fehlersuche. Gilt nach dem nächsten Neustart.",
     logSizeSaved: "Gespeichert ✓ - Bridge neu starten, um es zu übernehmen",
+    hopperHeader: "Füllstand des Behälters",
+    hcsrTitle: "Ultraschallsensor HC-SR04",
+    hcsrEnabled: "HC-SR04 aktivieren",
+    hcsrTrig: "TRIG-GPIO",
+    hcsrEcho: "ECHO-GPIO",
+    hcsrMin: "Minimale Höhe (cm)",
+    hcsrMax: "Maximale Höhe (cm)",
+    hcsrAlert: "Alarmschwelle (cm)",
+    hcsrHelp: "Höhe = maximale Höhe minus gemessener Abstand, begrenzt auf min/max. Die maximale Höhe entspricht dem Abstand zwischen Sensor und Boden bei leerem Behälter. Alarm bei oder unter der Schwelle. 5-V-ECHO pegelwandeln; GPIO19/20 (USB) sowie GPIO0-5/38 mit T-Dongle-Display meiden.",
+    hcsrWaiting: "Warte auf Messung…",
+    hcsrDisabled: "Sensor deaktiviert",
+    hcsrNoEcho: "Keine gültige Messung (Sensor und Verkabelung prüfen)",
+    hcsrLevel: "Höhe",
+    hcsrDistance: "Abstand",
+    hcsrAlertActive: "Alarm: Schwelle erreicht",
+    hcsrNormal: "Füllstand normal",
+    hcsrTaskError: "Messaufgabe nicht verfügbar",
+    hcsrSave: "Speichern",
+    hcsrSaving: "Speichern…",
+    hcsrSaved: "Gespeichert ✓",
+    hcsrSaveError: "Speichern fehlgeschlagen",
     accessTitle: "Zugriff auf die Seite",
     accessDesc: "Der Stick antwortet unter seiner IP-Adresse und unter open-firenet.local. Wenn Sie ihn unter einem anderen Namen öffnen, zum Beispiel dem von Ihrem Router vergebenen, tragen Sie diesen hier ein. Einer Seite einer anderen Website antwortet er nie.",
     accessHosts: "Zusätzliche Namen (einer pro Zeile, höchstens 8)",
@@ -3310,6 +3442,27 @@ const I18N = {
     logSizeTitle: "Historial de los intercambios con la estufa",
     logSizeDesc: "Mantiene los últimos mensajes intercambiados con la estufa, para el registro de la pestaña Diagnóstico y el archivo de diagnóstico. 16 kB deja más memoria libre; 32 kB mantiene el doble de historial, útil al buscar un problema. Se aplica en el próximo reinicio.",
     logSizeSaved: "Guardado ✓ - reinicie el pincho para aplicarlo",
+    hopperHeader: "Nivel de la tolva",
+    hcsrTitle: "Sensor ultrasónico HC-SR04",
+    hcsrEnabled: "Activar HC-SR04",
+    hcsrTrig: "GPIO TRIG",
+    hcsrEcho: "GPIO ECHO",
+    hcsrMin: "Altura mínima (cm)",
+    hcsrMax: "Altura máxima (cm)",
+    hcsrAlert: "Umbral de alerta (cm)",
+    hcsrHelp: "Altura = altura máxima menos la distancia medida, limitada a mín/máx. La altura máxima es la distancia entre el sensor y el fondo cuando el depósito está vacío. Alerta en el umbral o por debajo. Adapte ECHO de 5 V; evite GPIO19/20 (USB) y GPIO0-5/38 con la pantalla T-Dongle.",
+    hcsrWaiting: "Esperando una medición…",
+    hcsrDisabled: "Sensor desactivado",
+    hcsrNoEcho: "Sin medición válida (compruebe el sensor y el cableado)",
+    hcsrLevel: "Altura",
+    hcsrDistance: "Distancia",
+    hcsrAlertActive: "Alerta: umbral alcanzado",
+    hcsrNormal: "Nivel normal",
+    hcsrTaskError: "Tarea de medición no disponible",
+    hcsrSave: "Guardar",
+    hcsrSaving: "Guardando…",
+    hcsrSaved: "Guardado ✓",
+    hcsrSaveError: "No se pudo guardar",
     accessTitle: "Acceso a la página",
     accessDesc: "El pincho responde en su dirección IP y en open-firenet.local. Si lo abre bajo otro nombre, por ejemplo el que le da su router, agréguelo aquí. Nunca responde a una página de otro sitio web.",
     accessHosts: "Nombres adicionales (uno por línea, 8 como máximo)",
@@ -3513,6 +3666,7 @@ function applyLang() {
   document.getElementById('lblFlameHeader').textContent = t.flameHeader;
   document.getElementById('lblPowerHeader').textContent = t.powerHeader;
   document.getElementById('lblPelletsHeader').textContent = t.pelletsHeader;
+  document.getElementById('lblHopperHeader').textContent = t.hopperHeader;
   document.getElementById('lblServiceHeader').textContent = t.serviceHeader;
   Object.keys(APPLY_BUTTONS).forEach((id) => { const b = document.getElementById(id); if (b && !b.dataset.busy) b.textContent = t.btnApply; });
   document.getElementById('lblRuntimeHeader').textContent = t.runtimeHeader;
@@ -3626,6 +3780,16 @@ function applyLang() {
   document.getElementById('lblTxGap').textContent = t.txGapTitle;
   document.getElementById('btnTxGapDefault').textContent = t.txGapDefault;
   document.getElementById('lblTxGapHelp').textContent = t.txGapHelp;
+  document.getElementById('lblHcsrTitle').textContent = t.hcsrTitle;
+  document.getElementById('lblHcsrEnabled').textContent = t.hcsrEnabled;
+  document.getElementById('lblHcsrTrig').textContent = t.hcsrTrig;
+  document.getElementById('lblHcsrEcho').textContent = t.hcsrEcho;
+  document.getElementById('lblHcsrMin').textContent = t.hcsrMin;
+  document.getElementById('lblHcsrMax').textContent = t.hcsrMax;
+  document.getElementById('lblHcsrAlert').textContent = t.hcsrAlert;
+  document.getElementById('hcsrHelp').textContent = t.hcsrHelp;
+  if (!document.getElementById('btnSaveHcsr').dataset.busy) document.getElementById('btnSaveHcsr').textContent = t.hcsrSave;
+  loadHcsr04(false);
   setLbl('btnLogDownload', t.logDownload);
   document.getElementById('btnLogClear').textContent = t.logClear;
   setLbl('btnRestart', t.btnRestart);
@@ -3929,6 +4093,86 @@ async function loadLogSize() {
     document.getElementById('logSizeSelect').value = String((await r.json()).kb);
   } catch (e) { /* the page keeps working without it */ }
 }
+async function loadHcsr04(fill) {
+  const t = I18N[curLang] || I18N.en, status = document.getElementById('hcsrReading');
+  const card = document.getElementById('hopperCard'), percent = document.getElementById('hopperPercent');
+  const bar = document.getElementById('hopperBar');
+  try {
+    const r = await fetch('/api/hcsr04');
+    if (!r.ok) throw new Error(r.status);
+    const d = await r.json();
+    card.style.display = d.enabled ? '' : 'none';
+    if (d.enabled && d.valid && Number.isFinite(Number(d.fill_percent))) {
+      const charge = Math.max(0, Math.min(100, Number(d.fill_percent)));
+      percent.textContent = String(charge);
+      bar.style.width = charge + '%';
+      bar.classList.toggle('low', !!d.alert);
+    } else {
+      percent.textContent = '--';
+      bar.style.width = '0%';
+      bar.classList.remove('low');
+    }
+    if (fill) {
+      document.getElementById('hcsrEnabled').checked = d.enabled;
+      document.getElementById('hcsrTrig').value = d.trigger_pin;
+      document.getElementById('hcsrEcho').value = d.echo_pin;
+      document.getElementById('hcsrMin').value = d.min_height_cm;
+      document.getElementById('hcsrMax').value = d.max_height_cm;
+      document.getElementById('hcsrAlert').value = d.alert_height_cm;
+    }
+    if (!d.task_ready) {
+      status.textContent = t.hcsrTaskError;
+      status.style.color = 'var(--amber)';
+    } else if (!d.enabled) {
+      status.textContent = t.hcsrDisabled;
+      status.style.color = 'var(--text-dim)';
+    } else if (!d.valid) {
+      status.textContent = t.hcsrNoEcho;
+      status.style.color = 'var(--amber)';
+    } else {
+      status.textContent = `${t.hcsrLevel}: ${Number(d.height_cm).toFixed(1)} cm (${Number(d.fill_percent)} %) · ${t.hcsrDistance}: ${Number(d.distance_cm).toFixed(1)} cm · ${d.alert ? t.hcsrAlertActive : t.hcsrNormal}`;
+      status.style.color = d.alert ? '#ef4444' : 'var(--green)';
+    }
+  } catch (e) {
+    status.textContent = t.netError;
+    status.style.color = 'var(--amber)';
+  }
+}
+let _hcsrSaveTimer = null;
+async function saveHcsr04() {
+  const t = I18N[curLang] || I18N.en, btn = document.getElementById('btnSaveHcsr');
+  const body = {
+    enabled: document.getElementById('hcsrEnabled').checked,
+    trigger_pin: Number(document.getElementById('hcsrTrig').value),
+    echo_pin: Number(document.getElementById('hcsrEcho').value),
+    min_height_cm: Number(document.getElementById('hcsrMin').value),
+    max_height_cm: Number(document.getElementById('hcsrMax').value),
+    alert_height_cm: Number(document.getElementById('hcsrAlert').value)
+  };
+  btn.disabled = true;
+  btn.dataset.busy = '1';
+  btn.textContent = t.hcsrSaving;
+  let ok = false;
+  try {
+    const r = await fetch('/api/hcsr04', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+    if (!r.ok) throw new Error(r.status);
+    const d = await r.json();
+    if (d.ok !== true) throw new Error('save refused');
+    ok = true;
+    await loadHcsr04(true);
+  } catch (e) {
+    ok = false;
+  }
+  clearTimeout(_hcsrSaveTimer);
+  btn.textContent = ok ? t.hcsrSaved : t.hcsrSaveError;
+  btn.style.background = ok ? 'var(--green)' : 'var(--amber)';
+  btn.disabled = false;
+  _hcsrSaveTimer = setTimeout(() => {
+    delete btn.dataset.busy;
+    btn.textContent = (I18N[curLang] || I18N.en).hcsrSave;
+    btn.style.background = '';
+  }, 2500);
+}
 let _logSizeTimer = null;
 async function saveLogSize() {
   const t = I18N[curLang] || I18N.en, sel = document.getElementById('logSizeSelect'), note = document.getElementById('logSizeStatus');
@@ -4018,7 +4262,12 @@ loadMqtt(true);
 loadAccess();
 loadWifiPowerSaving();
 loadLogSize();
+loadHcsr04(true);
 setInterval(() => { if (currentPage() === 'bridge') loadMqtt(false); }, 3000);
+setInterval(() => {
+  if (currentPage() === 'stove' ||
+      (currentPage() === 'bridge' && document.getElementById('bridge-system').style.display !== 'none')) loadHcsr04(false);
+}, 2000);
 
 // Short "Saved" / "Could not save" note beside a setting, with the texts of the Wi-Fi power saving card.
 const _noteTimers = {};
@@ -5128,8 +5377,8 @@ function renderHealth(s) {
 // beside the tall controls. Inside a line the blocks are laid out in narrow rows (masonry): a block takes the rows its
 // height needs, so blocks of one column stack. Kept in this browser only (like the MultiAir choice); without storage
 // the page keeps its default layout.
-const CARD_IDS = ['hero', 'room', 'flame', 'power', 'pellets', 'runtime', 'logruntime', 'service', 'ignitions', 'deck'];
-const CARD_DEFAULT_LINES = [['hero'], ['room', 'flame', 'power', 'pellets', 'runtime', 'logruntime', 'service', 'ignitions'], ['deck']];
+const CARD_IDS = ['hero', 'room', 'flame', 'power', 'pellets', 'hopper', 'runtime', 'logruntime', 'service', 'ignitions', 'deck'];
+const CARD_DEFAULT_LINES = [['hero'], ['room', 'flame', 'power', 'pellets', 'hopper', 'runtime', 'logruntime', 'service', 'ignitions'], ['deck']];
 const CARD_COLS_MIN = 4, CARD_COLS_MAX = 8;               // the controls need four columns, which is the page as it was
 const CARD_SPAN = { hero: [3, 8, 4], deck: [4, 8, 4] };   // id: [narrowest, widest, default] in columns; the others are 1 to 8, default 1
 const CARD_NOHIDE = ['hero', 'deck'];                     // the state block and the controls cannot be hidden

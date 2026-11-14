@@ -12,6 +12,7 @@
 // USB : VID 0x303A / PID 0x819A.
 
 #include <mutex>
+#include <math.h>
 #include <Arduino.h>
 #include <WiFi.h>
 #include <WebServer.h>
@@ -77,6 +78,82 @@ static String g_otaHash;                  // SHA-256 of the update password, emp
 // dropping. The setting goes through the Wi-Fi library, which applies its own value when the station starts.
 static bool g_wifiPowerSaving = true;
 struct MqttCommand { std::string topic, payload; };
+
+struct Hcsr04Config {
+  bool enabled = false;
+  int triggerPin = 16, echoPin = 17;
+  int minHeightCm = 0, maxHeightCm = 100, alertHeightCm = 10;
+};
+struct Hcsr04Reading {
+  bool valid = false, alert = false;
+  float distanceCm = 0, heightCm = 0;
+  int fillPercent = 0;
+};
+static Hcsr04Config g_hcsr04Cfg;
+static Hcsr04Reading g_hcsr04Reading;
+static portMUX_TYPE g_hcsr04Mux = portMUX_INITIALIZER_UNLOCKED;
+static bool g_hcsr04TaskStarted = false;
+
+static bool hcsr04PinValid(int pin, bool output) {
+  if (pin < 0 || pin > 48 || (pin > 21 && pin < 33) || pin == 19 || pin == 20) return false;
+  if (output && pin == 46) return false;  // GPIO46 is input-only on ESP32-S3.
+  if ((g_dispActive || g_dispBoard == "tdongle" || g_dispBoard == "tdongle_off") &&
+      (pin == 0 || (pin >= 1 && pin <= 5) || pin == 38)) return false;
+  return true;
+}
+
+static void hcsr04Task(void*) {
+  int activeTrigger = -1, activeEcho = -1;
+  for (;;) {
+    Hcsr04Config cfg;
+    portENTER_CRITICAL(&g_hcsr04Mux);
+    cfg = g_hcsr04Cfg;
+    portEXIT_CRITICAL(&g_hcsr04Mux);
+
+    if (!cfg.enabled) {
+      if (activeTrigger >= 0) pinMode(activeTrigger, INPUT);
+      if (activeEcho >= 0 && activeEcho != activeTrigger) pinMode(activeEcho, INPUT);
+      activeTrigger = activeEcho = -1;
+      portENTER_CRITICAL(&g_hcsr04Mux);
+      g_hcsr04Reading = Hcsr04Reading{};
+      portEXIT_CRITICAL(&g_hcsr04Mux);
+      vTaskDelay(pdMS_TO_TICKS(1000));
+      continue;
+    }
+
+    if (cfg.triggerPin != activeTrigger || cfg.echoPin != activeEcho) {
+      if (activeTrigger >= 0) pinMode(activeTrigger, INPUT);
+      if (activeEcho >= 0 && activeEcho != activeTrigger) pinMode(activeEcho, INPUT);
+      activeTrigger = cfg.triggerPin;
+      activeEcho = cfg.echoPin;
+      pinMode(activeTrigger, OUTPUT);
+      digitalWrite(activeTrigger, LOW);
+      pinMode(activeEcho, INPUT);
+    }
+
+    digitalWrite(activeTrigger, LOW);
+    delayMicroseconds(2);
+    digitalWrite(activeTrigger, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(activeTrigger, LOW);
+    const unsigned long duration = pulseIn(activeEcho, HIGH, 30000UL);
+    Hcsr04Reading reading;
+    const float distance = duration ? duration / 58.0f : 0.0f;
+    if (distance >= 2.0f && distance <= 400.0f) {
+      reading.valid = true;
+      reading.distanceCm = distance;
+      reading.heightCm = constrain((float)cfg.maxHeightCm - distance,
+                                   (float)cfg.minHeightCm, (float)cfg.maxHeightCm);
+      reading.fillPercent = (int)lroundf((reading.heightCm - cfg.minHeightCm) * 100.0f /
+                                         (cfg.maxHeightCm - cfg.minHeightCm));
+      reading.alert = reading.heightCm <= cfg.alertHeightCm;
+    }
+    portENTER_CRITICAL(&g_hcsr04Mux);
+    g_hcsr04Reading = reading;
+    portEXIT_CRITICAL(&g_hcsr04Mux);
+    vTaskDelay(pdMS_TO_TICKS(1000));
+  }
+}
 
 // Avec CDCOnBoot=default (désactivé), le core ne démarre pas l'USB de lui-même :
 // on instancie le CDC et on fixe VID/PID AVANT USB.begin(). Serial = UART0 (debug).
@@ -315,6 +392,22 @@ static String jsonStoveSections() {
   if (itAF != m.sensors.end()) snprintf(airFlapsS, sizeof airFlapsS, "%.1f", itAF->second / 10.0f);
   auto itAT = m.sensors.find("airFlapsTarget");
   if (itAT != m.sensors.end()) snprintf(airFlapsTgtS, sizeof airFlapsTgtS, "%.1f", itAT->second / 10.0f);
+  Hcsr04Config hcsrCfg;
+  Hcsr04Reading hcsrReading;
+  portENTER_CRITICAL(&g_hcsr04Mux);
+  hcsrCfg = g_hcsr04Cfg;
+  hcsrReading = g_hcsr04Reading;
+  portEXIT_CRITICAL(&g_hcsr04Mux);
+  char hcsrFields[112] = "";
+  if (hcsrCfg.enabled) {
+    char hcsrPercent[5] = "null";
+    if (hcsrReading.valid) snprintf(hcsrPercent, sizeof hcsrPercent, "%d", hcsrReading.fillPercent);
+    snprintf(hcsrFields, sizeof hcsrFields,
+             ",\"hopper_enabled\":true,\"hopper_valid\":%s,\"hopper_fill_percent\":%s,\"hopper_low_level\":%s",
+             hcsrReading.valid ? "true" : "false",
+             hcsrPercent,
+             hcsrReading.alert ? "true" : "false");
+  }
   // Without a RIKA room sensor the stove reports the constant 1024 (0x400) as room temperature (read in the 2.27
   // disassembly: record 0 is set to 0x400 when no sensor is present); publish null instead of 102.4 °C.
   bool roomSensor = (rTemp != 1024);
@@ -403,7 +496,7 @@ static String jsonStoveSections() {
       "\"auger_speed_rpm\":%ld,"
       "\"power_actual_percent\":%ld,"
       "\"air_flaps_percent\":%s,"
-      "\"air_flaps_target_percent\":%s"
+      "\"air_flaps_target_percent\":%s%s"
     "},"
     "\"controls\":{"
       "\"on\":%s,"
@@ -432,7 +525,7 @@ static String jsonStoveSections() {
     errMask, errSub, warnCode,
     modelS, modelNameS, brandS, mbVerS, buildS,
     roomTempS, roomSensor ? "true" : "false", fTempF, bTempF, pTotalS, pHoursS, logMinS, logHoursS, sCountS, idFan, auger, powerNow,
-    airFlapsS, airFlapsTgtS,
+    airFlapsS, airFlapsTgtS, hcsrFields,
     (curOn == 1) ? "true" : "false",
     modeName, curMode, rTargetF, curStage,
     (htActive == 1) ? "true" : "false", sbTempF,
@@ -1169,6 +1262,89 @@ static void handleWifiPowerSaving() {
     }
   }
   web.send(200, "application/json", String("{\"ok\":true,\"enabled\":") + (g_wifiPowerSaving ? "true" : "false") + "}");
+}
+
+static bool parseHcsr04Int(const std::string& text, int& value) {
+  char* end = nullptr;
+  long parsed = strtol(text.c_str(), &end, 10);
+  if (end == text.c_str() || *end != '\0' || parsed < 0 || parsed > 1000) return false;
+  value = (int)parsed;
+  return true;
+}
+
+static bool parseHcsr04Bool(const std::string& text, bool& value) {
+  if (text == "true" || text == "1" || text == "on") { value = true; return true; }
+  if (text == "false" || text == "0" || text == "off") { value = false; return true; }
+  return false;
+}
+
+// GET/POST /api/hcsr04: saved HC-SR04 configuration and its latest reading.
+static void handleHcsr04() {
+  if (web.method() == HTTP_OPTIONS) { web.send(204); return; }
+  if (web.method() == HTTP_POST) {
+    Hcsr04Config cfg;
+    portENTER_CRITICAL(&g_hcsr04Mux);
+    cfg = g_hcsr04Cfg;
+    portEXIT_CRITICAL(&g_hcsr04Mux);
+    std::vector<std::pair<std::string, std::string>> kv;
+    firenet::jsonPairs(web.hasArg("plain") ? web.arg("plain").c_str() : "", kv);
+    for (int i = 0; i < web.args(); i++) if (web.argName(i) != "plain") kv.push_back({web.argName(i).c_str(), web.arg(i).c_str()});
+    for (const auto& p : kv) {
+      String value = p.second.c_str(); value.trim();
+      const std::string text(value.c_str());
+      bool valid = true;
+      if (p.first == "enabled") valid = parseHcsr04Bool(text, cfg.enabled);
+      else if (p.first == "trigger_pin") valid = parseHcsr04Int(text, cfg.triggerPin);
+      else if (p.first == "echo_pin") valid = parseHcsr04Int(text, cfg.echoPin);
+      else if (p.first == "min_height_cm") valid = parseHcsr04Int(text, cfg.minHeightCm);
+      else if (p.first == "max_height_cm") valid = parseHcsr04Int(text, cfg.maxHeightCm);
+      else if (p.first == "alert_height_cm") valid = parseHcsr04Int(text, cfg.alertHeightCm);
+      if (!valid) {
+        web.send(400, "application/json", "{\"ok\":false,\"error\":\"invalid parameter value\"}");
+        return;
+      }
+    }
+    if (cfg.triggerPin == cfg.echoPin || !hcsr04PinValid(cfg.triggerPin, true) || !hcsr04PinValid(cfg.echoPin, false)) {
+      web.send(400, "application/json", "{\"ok\":false,\"error\":\"invalid or conflicting GPIO; use distinct, available ESP32-S3 pins\"}");
+      return;
+    }
+    if (cfg.minHeightCm >= cfg.maxHeightCm || cfg.maxHeightCm > 400 ||
+        cfg.alertHeightCm < cfg.minHeightCm || cfg.alertHeightCm > cfg.maxHeightCm) {
+      web.send(400, "application/json", "{\"ok\":false,\"error\":\"heights must satisfy min <= alert <= max and max <= 400 cm\"}");
+      return;
+    }
+
+    char serialized[48];
+    snprintf(serialized, sizeof(serialized), "%d,%d,%d,%d,%d,%d", cfg.enabled ? 1 : 0, cfg.triggerPin,
+             cfg.echoPin, cfg.minHeightCm, cfg.maxHeightCm, cfg.alertHeightCm);
+    prefs.begin("firenet", false);
+    const bool saved = prefs.getString("hcsr_cfg", "") == serialized || prefs.putString("hcsr_cfg", serialized) != 0;
+    prefs.end();
+    if (!saved) {
+      web.send(500, "application/json", "{\"ok\":false,\"error\":\"configuration could not be saved\"}");
+      return;
+    }
+    portENTER_CRITICAL(&g_hcsr04Mux);
+    g_hcsr04Cfg = cfg;
+    portEXIT_CRITICAL(&g_hcsr04Mux);
+  }
+
+  Hcsr04Config cfg;
+  Hcsr04Reading reading;
+  portENTER_CRITICAL(&g_hcsr04Mux);
+  cfg = g_hcsr04Cfg;
+  reading = g_hcsr04Reading;
+  portEXIT_CRITICAL(&g_hcsr04Mux);
+  String json = String("{\"ok\":true,\"task_ready\":") + (g_hcsr04TaskStarted ? "true" : "false")
+    + ",\"enabled\":" + (cfg.enabled ? "true" : "false")
+    + ",\"trigger_pin\":" + cfg.triggerPin + ",\"echo_pin\":" + cfg.echoPin
+    + ",\"min_height_cm\":" + cfg.minHeightCm + ",\"max_height_cm\":" + cfg.maxHeightCm
+    + ",\"alert_height_cm\":" + cfg.alertHeightCm + ",\"valid\":" + (reading.valid ? "true" : "false")
+    + ",\"distance_cm\":" + (reading.valid ? String(reading.distanceCm, 1) : String("null"))
+    + ",\"height_cm\":" + (reading.valid ? String(reading.heightCm, 1) : String("null"))
+    + ",\"fill_percent\":" + (reading.valid ? String(reading.fillPercent) : String("null"))
+    + ",\"alert\":" + (reading.alert ? "true" : "false") + "}";
+  web.send(200, "application/json", json);
 }
 
 static void handleAccess() {
@@ -1951,7 +2127,30 @@ void setup() {
   wifiPass = prefs.getString("pass", "");
   g_wifiPowerSaving = prefs.getBool("wifi_ps", true);   // read before the Wi-Fi starts, see applyWifiPowerSaving
   g_dispCfg.fromPrefs(prefs.getString("disp_cfg", "").c_str());   // screens of the small display
+  String hcsr04Saved = prefs.getString("hcsr_cfg", "");
   prefs.end();
+
+  if (!hcsr04Saved.isEmpty()) {
+    int enabled = 0;
+    Hcsr04Config saved;
+    if (sscanf(hcsr04Saved.c_str(), "%d,%d,%d,%d,%d,%d", &enabled, &saved.triggerPin, &saved.echoPin,
+               &saved.minHeightCm, &saved.maxHeightCm, &saved.alertHeightCm) == 6 &&
+        (enabled == 0 || enabled == 1) &&
+        saved.triggerPin != saved.echoPin && hcsr04PinValid(saved.triggerPin, true) &&
+        hcsr04PinValid(saved.echoPin, false) && saved.minHeightCm < saved.maxHeightCm &&
+        saved.maxHeightCm <= 400 && saved.alertHeightCm >= saved.minHeightCm &&
+        saved.alertHeightCm <= saved.maxHeightCm) {
+      saved.enabled = enabled == 1;
+      g_hcsr04Cfg = saved;
+    } else {
+      DBG.println("[hcsr04] invalid saved configuration; using defaults");
+    }
+  }
+  if (xTaskCreatePinnedToCore(hcsr04Task, "hcsr04", 3072, nullptr, 1, nullptr, 0) == pdPASS) {
+    g_hcsr04TaskStarted = true;
+  } else {
+    DBG.println("[hcsr04] could not start measurement task");
+  }
 
   if (wifiSsid.length()) {
     g_link->setCredentials(wifiSsid.c_str(), wifiPass.c_str());
@@ -2031,6 +2230,7 @@ void setup() {
   web.on("/api/mqtt", handleMqtt);
   web.on("/api/access", handleAccess);
   web.on("/api/wifi_power_saving", handleWifiPowerSaving);
+  web.on("/api/hcsr04", handleHcsr04);
   web.on("/api/log_size", handleLogSize);
   web.on("/api/display", handleDisplay);
   web.on("/api/wifi", HTTP_POST, handleWifi);

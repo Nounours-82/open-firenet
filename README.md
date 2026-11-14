@@ -39,6 +39,12 @@ RIKA stoves use a USB CDC dongle (the "Firenet 2.0" stick) to connect to RIKA's 
 | ESP32-S3 dev board with native USB | The board must expose the S3's USB OTG pins (GPIO19/20 = D+/D−) on its USB connector. Any connector type works (USB-A, USB-C, Micro-B) as long as it is wired to the S3's native USB, not to a UART bridge chip. |
 | Cable to stove | The stove has a USB-A socket. Use whatever cable or adapter connects your board's USB port to USB-A Male (e.g. USB-C to USB-A, or USB-A to USB-A). |
 
+### Optional HC-SR04 level sensor
+
+The web page can read a container level from an HC-SR04. Power the module as specified by its manufacturer, connect its TRIG input to a free ESP32-S3 GPIO, and connect ECHO through a 5 V-to-3.3 V level shifter or voltage divider before it reaches the ESP32-S3. Connect the grounds together. Do not connect a 5 V ECHO output directly to an ESP32-S3 GPIO. Avoid GPIO19/20 (native USB); if the T-Dongle display is enabled, also avoid GPIO0-5 and GPIO38.
+
+The sensor is off by default. Configure and enable it in **Key → System → HC-SR04**. Set maximum height to the sensor-to-bottom distance when the container is empty; the reported height is maximum height minus the measured surface distance, clamped to the configured minimum and maximum. The stove dashboard then shows the percentage of that configured height range, and the alert is shown when the measured height reaches or falls below the alert threshold. Select two distinct, otherwise unused GPIOs for TRIG and ECHO.
+
 ### How it connects
 
 The stove acts as USB host; the ESP32-S3 acts as USB device (CDC class, VID `0x303A` / PID `0x819A`). The stove does not check the VID/PID: it only needs a CDC data interface, which the firmware provides.
@@ -317,6 +323,7 @@ Open Firenet V2 provides a clean, unified REST JSON API with natural units (temp
 | `/api/restart` | POST | Software restart of the ESP32 bridge |
 | `/api/access` | GET / POST | Extra names under which the bridge accepts to answer |
 | `/api/wifi_power_saving` | GET / POST | Wi-Fi power saving, on or off |
+| `/api/hcsr04` | GET / POST | HC-SR04 enable, GPIOs, height limits, alert threshold, and latest level and fill percentage |
 | `/api/mqtt` | GET / POST | MQTT settings and connection status |
 | `/api/txgap` | GET / POST | Delay between frames sent to the stove, in ms (50–600, default 150) |
 | `/api/display` | GET / POST | Screens of the bridge's small display (boards that have one): which ones, in which order, seconds per screen |
@@ -376,7 +383,11 @@ Since firmware 4.0 the bridge answers its own page and programs on your network 
     "auger_speed_rpm": 0,
     "power_actual_percent": 0,
     "air_flaps_percent": 0.0,
-    "air_flaps_target_percent": 0.0
+    "air_flaps_target_percent": 0.0,
+    "hopper_enabled": true,
+    "hopper_valid": true,
+    "hopper_fill_percent": 75,
+    "hopper_low_level": false
   },
   "controls": {
     "on": false,
@@ -407,6 +418,7 @@ Since firmware 4.0 the bridge answers its own page and programs on your network 
 ```
 
 - `room_temperature` is `null` and `room_sensor_connected` is `false` when no RIKA room sensor is connected.
+- With the HC-SR04 enabled in the web interface, `/api/state` also includes the hopper fill percentage and low-level alert in `sensors`; the percentage is `null` until a valid measurement is available.
 - `stove.model`, `stove.model_name`, `stove.brand`, `stove.mainboard_version` and `stove.firmware_build` are `null` until the stove has sent them (the bridge is not linked yet).
 - `usb.host_connected` is `true` once a USB host (the stove) has detected the bridge on the board's native USB port, and `usb.rx_bytes` counts the bytes received from the stove since boot. `false` / `0` usually means the stove is plugged into the wrong port of the board (UART / COM), a charge-only cable, or a stove that is off.
 - `version_frame` tells which protocol variant the stove answered: `V3` (firmware 2.29), `V28` (2.28), `V1` (2.26 / 2.27). It is `?` as long as no text version frame was acknowledged, which is the case of a stove on firmware 2.25 (it speaks numeric frames, see [PROTOCOL.md](PROTOCOL.md)).

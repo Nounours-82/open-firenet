@@ -364,6 +364,44 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/WifiPowerSaving" }
+  /api/hcsr04:
+    get:
+      tags: [Bridge]
+      summary: HC-SR04 configuration and latest level reading
+      description: "When enabled, the bridge measures the sensor-to-surface distance about once a second. `height_cm` is `max_height_cm - distance_cm`, clamped to the configured minimum and maximum. The maximum is the sensor-to-bottom distance when the container is empty; an alert is raised when the resulting height is at or below `alert_height_cm`."
+      responses:
+        "200":
+          description: Configuration and latest reading
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Hcsr04" }
+    post:
+      tags: [Bridge]
+      summary: Configure or enable the HC-SR04
+      description: "Saved in flash and applied immediately. GPIOs must be distinct, available ESP32-S3 pins; height values are in cm, with min <= alert <= max <= 400."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled: { type: boolean }
+                trigger_pin: { type: integer, minimum: 0, maximum: 48 }
+                echo_pin: { type: integer, minimum: 0, maximum: 48 }
+                min_height_cm: { type: integer, minimum: 0, maximum: 399 }
+                max_height_cm: { type: integer, minimum: 1, maximum: 400 }
+                alert_height_cm: { type: integer, minimum: 0, maximum: 400 }
+      responses:
+        "200":
+          description: Configuration as saved, with the latest reading
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Hcsr04" }
+        "400":
+          description: Invalid GPIO or height configuration
+        "500":
+          description: Configuration could not be saved
   /api/log_size:
     get:
       tags: [Bridge]
@@ -531,6 +569,22 @@ components:
       properties:
         ok: { type: boolean }
         enabled: { type: boolean }
+    Hcsr04:
+      type: object
+      properties:
+        ok: { type: boolean }
+        task_ready: { type: boolean, description: Whether the background measurement task started successfully }
+        enabled: { type: boolean }
+        trigger_pin: { type: integer }
+        echo_pin: { type: integer }
+        min_height_cm: { type: integer }
+        max_height_cm: { type: integer }
+        alert_height_cm: { type: integer }
+        valid: { type: boolean, description: Whether the latest sensor reading is valid }
+        distance_cm: { type: number, nullable: true, description: Distance from the sensor to the surface }
+        height_cm: { type: number, nullable: true, description: "Computed level height, clamped to the configured range" }
+        fill_percent: { type: integer, nullable: true, minimum: 0, maximum: 100, description: "Rounded percentage of the configured height range" }
+        alert: { type: boolean, description: True when the valid height is at or below the alert threshold }
     LogSize:
       type: object
       properties:
@@ -683,6 +737,10 @@ components:
         power_actual_percent: { type: integer, description: "Power the stove really runs at. In comfort mode the stove sets it itself, whatever `power_percent` says. 0 when it is not heating." }
         air_flaps_percent: { type: number, nullable: true }
         air_flaps_target_percent: { type: number, nullable: true }
+        hopper_enabled: { type: boolean, description: "Present only when the HC-SR04 hopper sensor is enabled" }
+        hopper_valid: { type: boolean, description: "Whether the latest HC-SR04 measurement is valid" }
+        hopper_fill_percent: { type: integer, nullable: true, minimum: 0, maximum: 100, description: "Hopper fill percentage; null until a valid measurement is available" }
+        hopper_low_level: { type: boolean, description: "True when a valid measurement is at or below the configured alert threshold" }
     ControlsState:
       type: object
       description: The current settings
