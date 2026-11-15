@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Open Firenet bridge API
-  version: 5.1.0
+  version: 5.1.1
   description: |
     Local REST API of the Open Firenet bridge, the ESP32-S3 that replaces the RIKA Firenet stick. It is served on your
     network at `http://open-firenet.local` (or the bridge's IP address), without key or account.
@@ -368,7 +368,7 @@ paths:
     get:
       tags: [Bridge]
       summary: HC-SR04 configuration and latest level reading
-      description: "When enabled, the bridge measures the sensor-to-surface distance about once a second. `height_cm` is `max_height_cm - distance_cm`, clamped to the configured minimum and maximum. The maximum is the sensor-to-bottom distance when the container is empty; an alert is raised when the resulting height is at or below `alert_height_cm`."
+      description: "When enabled, the bridge measures the sensor-to-surface distance about once a second. `height_cm` is `max_height_cm - distance_cm`, clamped to the configured minimum and maximum. The fill percentage is calibrated between `max_height_cm` (sensor-to-bottom distance when empty) and `full_distance_cm` (sensor-to-pellets distance when full). An alert is raised when the resulting height is at or below `alert_height_cm`."
       responses:
         "200":
           description: Configuration and latest reading
@@ -378,7 +378,7 @@ paths:
     post:
       tags: [Bridge]
       summary: Configure or enable the HC-SR04
-      description: "Saved in flash and applied immediately. GPIOs must be distinct, available ESP32-S3 pins; height values are in cm, with min <= alert <= max <= 400."
+      description: "Saved in flash and applied immediately. GPIOs must be distinct, available ESP32-S3 pins; height values are in cm, with min <= alert <= max <= 400 and full_distance_cm < max_height_cm."
       requestBody:
         required: true
         content:
@@ -391,6 +391,7 @@ paths:
                 echo_pin: { type: integer, minimum: 0, maximum: 48 }
                 min_height_cm: { type: integer, minimum: 0, maximum: 399 }
                 max_height_cm: { type: integer, minimum: 1, maximum: 400 }
+                full_distance_cm: { type: integer, minimum: 0, maximum: 399, description: "Sensor-to-pellets distance when the hopper is full" }
                 alert_height_cm: { type: integer, minimum: 0, maximum: 400 }
       responses:
         "200":
@@ -579,6 +580,7 @@ components:
         echo_pin: { type: integer }
         min_height_cm: { type: integer }
         max_height_cm: { type: integer }
+        full_distance_cm: { type: integer, description: "Sensor-to-pellets distance when the hopper is full" }
         alert_height_cm: { type: integer }
         valid: { type: boolean, description: Whether the latest sensor reading is valid }
         distance_cm: { type: number, nullable: true, description: Distance from the sensor to the surface }

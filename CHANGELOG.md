@@ -1,5 +1,10 @@
 # Changelog
 
+## v5.1.1 (2026-11-15)
+
+### Fixes
+- HC-SR04: restore the full-load distance calibration and save it with the other sensor settings, so it remains set after saving or restarting the bridge.
+
 ## v5.1.0 (2026-11-15)
 
 ### New

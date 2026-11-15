@@ -43,7 +43,7 @@ RIKA stoves use a USB CDC dongle (the "Firenet 2.0" stick) to connect to RIKA's 
 
 The web page can read a container level from an HC-SR04. Power the module as specified by its manufacturer, connect its TRIG input to a free ESP32-S3 GPIO, and connect ECHO through a 5 V-to-3.3 V level shifter or voltage divider before it reaches the ESP32-S3. Connect the grounds together. Do not connect a 5 V ECHO output directly to an ESP32-S3 GPIO. Avoid GPIO19/20 (native USB); if the T-Dongle display is enabled, also avoid GPIO0-5 and GPIO38.
 
-The sensor is off by default. Configure and enable it in **Key → System → HC-SR04**. Set maximum height to the sensor-to-bottom distance when the container is empty; the reported height is maximum height minus the measured surface distance, clamped to the configured minimum and maximum. The stove dashboard then shows the percentage of that configured height range, and the alert is shown when the measured height reaches or falls below the alert threshold. Select two distinct, otherwise unused GPIOs for TRIG and ECHO.
+The sensor is off by default. Configure and enable it in **Key → System → HC-SR04**. Set maximum height to the sensor-to-bottom distance when the container is empty and full distance to the sensor-to-pellets distance when full; the fill percentage is calibrated between those distances. The reported height is maximum height minus the measured surface distance, clamped to the configured minimum and maximum. The alert is shown when the measured height reaches or falls below its threshold. Select two distinct, otherwise unused GPIOs for TRIG and ECHO.
 
 ### How it connects
 
@@ -339,7 +339,7 @@ Open Firenet V2 provides a clean, unified REST JSON API with natural units (temp
 | `/api/restart` | POST | Software restart of the ESP32 bridge |
 | `/api/access` | GET / POST | Extra names under which the bridge accepts to answer |
 | `/api/wifi_power_saving` | GET / POST | Wi-Fi power saving, on or off |
-| `/api/hcsr04` | GET / POST | HC-SR04 enable, GPIOs, height limits, alert threshold, and latest level and fill percentage |
+| `/api/hcsr04` | GET / POST | HC-SR04 enable, GPIOs, height limits, full distance, alert threshold, and latest level and fill percentage |
 | `/api/mqtt` | GET / POST | MQTT settings and connection status |
 | `/api/txgap` | GET / POST | Delay between frames sent to the stove, in ms (50–600, default 150) |
 | `/api/display` | GET / POST | Screens of the bridge's small display (boards that have one): which ones, in which order, seconds per screen |

@@ -1505,11 +1505,15 @@ input:checked + .slider-switch:before { transform: translateX(20px); background-
           <input class="input-text" id="hcsrMax" type="number" min="1" max="400" step="1">
         </label>
         <label style="flex:1;min-width:120px;display:flex;flex-direction:column;gap:4px;font-size:0.8rem;color:var(--text-dim)">
+          <span id="lblHcsrFullDistance">Distance à pleine charge (cm)</span>
+          <input class="input-text" id="hcsrFullDistance" type="number" min="0" max="399" step="1">
+        </label>
+        <label style="flex:1;min-width:120px;display:flex;flex-direction:column;gap:4px;font-size:0.8rem;color:var(--text-dim)">
           <span id="lblHcsrAlert">Seuil d'alerte (cm)</span>
           <input class="input-text" id="hcsrAlert" type="number" min="0" max="400" step="1">
         </label>
       </div>
-      <div id="hcsrHelp" style="font-size:0.75rem;color:var(--text-dim)">La hauteur est calculée comme hauteur max moins la distance mesurée. La hauteur max correspond à la distance capteur-fond lorsque le réservoir est vide. Alerte sous le seuil.</div>
+      <div id="hcsrHelp" style="font-size:0.75rem;color:var(--text-dim)">Pourcentage calibré entre la distance capteur-fond lorsque la trémie est vide et la distance capteur-pellets lorsqu'elle est pleine. La hauteur affichée est hauteur max moins la distance mesurée, limitée aux valeurs min/max. Alerte sous le seuil.</div>
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
         <div id="hcsrReading" style="font-size:0.9rem;color:var(--text-dim)">En attente de mesure…</div>
         <button type="button" class="power-btn" id="btnSaveHcsr" style="padding:6px 16px;font-size:0.85rem" onclick="saveHcsr04()">Enregistrer</button>
@@ -1890,8 +1894,9 @@ const I18N = {
     hcsrEcho: "GPIO ECHO",
     hcsrMin: "Hauteur minimale (cm)",
     hcsrMax: "Hauteur maximale (cm)",
+    hcsrFullDistance: "Distance à pleine charge (cm)",
     hcsrAlert: "Seuil d'alerte (cm)",
-    hcsrHelp: "Hauteur = hauteur max moins la distance mesurée, limitée aux valeurs min/max. La hauteur max est la distance capteur-fond lorsque le réservoir est vide. Alerte sous le seuil. Protégez ECHO 5 V avec un diviseur/convertisseur; évitez GPIO19/20 (USB), et GPIO0-5/38 avec l'écran T-Dongle.",
+    hcsrHelp: "Pourcentage calibré entre la distance capteur-fond lorsque la trémie est vide et la distance capteur-pellets lorsqu'elle est pleine. La hauteur affichée est hauteur max moins la distance mesurée, limitée aux valeurs min/max. Alerte sous le seuil. Protégez ECHO 5 V avec un diviseur/convertisseur; évitez GPIO19/20 (USB), et GPIO0-5/38 avec l'écran T-Dongle.",
     hcsrWaiting: "En attente de mesure…",
     hcsrDisabled: "Capteur désactivé",
     hcsrNoEcho: "Aucune mesure valide (vérifiez le capteur et son câblage)",
@@ -2267,8 +2272,9 @@ const I18N = {
     hcsrEcho: "ECHO GPIO",
     hcsrMin: "Minimum height (cm)",
     hcsrMax: "Maximum height (cm)",
+    hcsrFullDistance: "Sensor-to-pellets distance when full (cm)",
     hcsrAlert: "Alert threshold (cm)",
-    hcsrHelp: "Height = maximum height minus measured distance, clamped to min/max. Maximum height is the sensor-to-bottom distance when the container is empty. Alert at or below threshold. Level-shift the 5 V ECHO; avoid GPIO19/20 (USB), and GPIO0-5/38 with the T-Dongle display.",
+    hcsrHelp: "Fill percentage is calibrated between the sensor-to-bottom distance when empty and the sensor-to-pellets distance when full. Displayed height is maximum height minus measured distance, clamped to min/max. Alert at or below threshold. Level-shift the 5 V ECHO; avoid GPIO19/20 (USB), and GPIO0-5/38 with the T-Dongle display.",
     hcsrWaiting: "Waiting for a measurement…",
     hcsrDisabled: "Sensor disabled",
     hcsrNoEcho: "No valid measurement (check the sensor and wiring)",
@@ -2652,8 +2658,9 @@ const I18N = {
     "hcsrEcho": "GPIO ECHO",
     "hcsrMin": "Altezza minima (cm)",
     "hcsrMax": "Altezza massima (cm)",
+    "hcsrFullDistance": "Distanza sensore-pellet a serbatoio pieno (cm)",
     "hcsrAlert": "Soglia di allarme (cm)",
-    "hcsrHelp": "Altezza = altezza max meno distanza misurata, limitata ai valori min/max. L'altezza max è la distanza tra sensore e fondo con il serbatoio vuoto. Allarme alla soglia o sotto. Adattare ECHO a 3,3 V; evitare GPIO19/20 (USB) e GPIO0-5/38 con lo schermo T-Dongle.",
+    "hcsrHelp": "La percentuale è calibrata tra la distanza sensore-fondo a serbatoio vuoto e la distanza sensore-pellet a serbatoio pieno. L'altezza visualizzata è altezza max meno distanza misurata, limitata ai valori min/max. Allarme alla soglia o sotto. Adattare ECHO a 3,3 V; evitare GPIO19/20 (USB) e GPIO0-5/38 con lo schermo T-Dongle.",
     "hcsrWaiting": "In attesa di una misura…",
     "hcsrDisabled": "Sensore disattivato",
     "hcsrNoEcho": "Nessuna misura valida (controllare sensore e cablaggio)",
@@ -3081,8 +3088,9 @@ const I18N = {
     hcsrEcho: "ECHO-GPIO",
     hcsrMin: "Minimale Höhe (cm)",
     hcsrMax: "Maximale Höhe (cm)",
+    hcsrFullDistance: "Sensor-Pellet-Abstand bei vollem Behälter (cm)",
     hcsrAlert: "Alarmschwelle (cm)",
-    hcsrHelp: "Höhe = maximale Höhe minus gemessener Abstand, begrenzt auf min/max. Die maximale Höhe entspricht dem Abstand zwischen Sensor und Boden bei leerem Behälter. Alarm bei oder unter der Schwelle. 5-V-ECHO pegelwandeln; GPIO19/20 (USB) sowie GPIO0-5/38 mit T-Dongle-Display meiden.",
+    hcsrHelp: "Der Füllstand wird zwischen Sensor-Boden-Abstand bei leerem Behälter und Sensor-Pellet-Abstand bei vollem Behälter kalibriert. Die angezeigte Höhe ist maximale Höhe minus gemessener Abstand, begrenzt auf min/max. Alarm bei oder unter der Schwelle. 5-V-ECHO pegelwandeln; GPIO19/20 (USB) sowie GPIO0-5/38 mit T-Dongle-Display meiden.",
     hcsrWaiting: "Warte auf Messung…",
     hcsrDisabled: "Sensor deaktiviert",
     hcsrNoEcho: "Keine gültige Messung (Sensor und Verkabelung prüfen)",
@@ -3458,8 +3466,9 @@ const I18N = {
     hcsrEcho: "GPIO ECHO",
     hcsrMin: "Altura mínima (cm)",
     hcsrMax: "Altura máxima (cm)",
+    hcsrFullDistance: "Distancia sensor-pellets con la tolva llena (cm)",
     hcsrAlert: "Umbral de alerta (cm)",
-    hcsrHelp: "Altura = altura máxima menos la distancia medida, limitada a mín/máx. La altura máxima es la distancia entre el sensor y el fondo cuando el depósito está vacío. Alerta en el umbral o por debajo. Adapte ECHO de 5 V; evite GPIO19/20 (USB) y GPIO0-5/38 con la pantalla T-Dongle.",
+    hcsrHelp: "El porcentaje se calibra entre la distancia del sensor al fondo con la tolva vacía y la distancia del sensor a los pellets con la tolva llena. La altura mostrada es la altura máxima menos la distancia medida, limitada a mín/máx. Alerta en el umbral o por debajo. Adapte ECHO de 5 V; evite GPIO19/20 (USB) y GPIO0-5/38 con la pantalla T-Dongle.",
     hcsrWaiting: "Esperando una medición…",
     hcsrDisabled: "Sensor desactivado",
     hcsrNoEcho: "Sin medición válida (compruebe el sensor y el cableado)",
@@ -3797,6 +3806,7 @@ function applyLang() {
   document.getElementById('lblHcsrEcho').textContent = t.hcsrEcho;
   document.getElementById('lblHcsrMin').textContent = t.hcsrMin;
   document.getElementById('lblHcsrMax').textContent = t.hcsrMax;
+  document.getElementById('lblHcsrFullDistance').textContent = t.hcsrFullDistance;
   document.getElementById('lblHcsrAlert').textContent = t.hcsrAlert;
   document.getElementById('hcsrHelp').textContent = t.hcsrHelp;
   if (!document.getElementById('btnSaveHcsr').dataset.busy) document.getElementById('btnSaveHcsr').textContent = t.hcsrSave;
@@ -4140,6 +4150,7 @@ async function loadHcsr04(fill) {
       document.getElementById('hcsrEcho').value = d.echo_pin;
       document.getElementById('hcsrMin').value = d.min_height_cm;
       document.getElementById('hcsrMax').value = d.max_height_cm;
+      document.getElementById('hcsrFullDistance').value = d.full_distance_cm;
       document.getElementById('hcsrAlert').value = d.alert_height_cm;
     }
     if (!d.task_ready) {
@@ -4169,6 +4180,7 @@ async function saveHcsr04() {
     echo_pin: Number(document.getElementById('hcsrEcho').value),
     min_height_cm: Number(document.getElementById('hcsrMin').value),
     max_height_cm: Number(document.getElementById('hcsrMax').value),
+    full_distance_cm: Number(document.getElementById('hcsrFullDistance').value),
     alert_height_cm: Number(document.getElementById('hcsrAlert').value)
   };
   btn.disabled = true;

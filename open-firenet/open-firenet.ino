@@ -31,6 +31,7 @@
 #include "firenet_api.h"
 #include "firenet_web_guard.h"
 #include "firenet_crash.h"
+#include "firenet_hcsr04.h"
 #include "esp_core_dump.h"   // summary of the last crash, left in flash by the chip
 #include "esp_app_desc.h"
 #include "firenet_mac.h"
@@ -83,11 +84,7 @@ static String g_otaHash;                  // SHA-256 of the update password, emp
 static bool g_wifiPowerSaving = true;
 struct MqttCommand { std::string topic, payload; };
 
-struct Hcsr04Config {
-  bool enabled = false;
-  int triggerPin = 16, echoPin = 17;
-  int minHeightCm = 0, maxHeightCm = 100, alertHeightCm = 10;
-};
+using firenet::Hcsr04Config;
 struct Hcsr04Reading {
   bool valid = false, alert = false;
   float distanceCm = 0, heightCm = 0;
@@ -148,8 +145,7 @@ static void hcsr04Task(void*) {
       reading.distanceCm = distance;
       reading.heightCm = constrain((float)cfg.maxHeightCm - distance,
                                    (float)cfg.minHeightCm, (float)cfg.maxHeightCm);
-      reading.fillPercent = (int)lroundf((reading.heightCm - cfg.minHeightCm) * 100.0f /
-                                         (cfg.maxHeightCm - cfg.minHeightCm));
+      reading.fillPercent = firenet::hcsr04FillPercent(distance, cfg.fullDistanceCm, cfg.maxHeightCm);
       reading.alert = reading.heightCm <= cfg.alertHeightCm;
     }
     portENTER_CRITICAL(&g_hcsr04Mux);
@@ -167,7 +163,7 @@ SET_LOOP_TASK_STACK_SIZE(12 * 1024);   // loop() was left with 1.3 kB of its 8 k
 
 // --------------------------------------------------------- version & config USB
 #ifndef OPENFIRENET_VERSION
-#define OPENFIRENET_VERSION "5.1.0"
+#define OPENFIRENET_VERSION "5.1.1"
 #endif
 
 // Identifiants USB Open Firenet
@@ -1359,6 +1355,7 @@ static void handleHcsr04() {
       else if (p.first == "min_height_cm") valid = parseHcsr04Int(text, cfg.minHeightCm);
       else if (p.first == "max_height_cm") valid = parseHcsr04Int(text, cfg.maxHeightCm);
       else if (p.first == "alert_height_cm") valid = parseHcsr04Int(text, cfg.alertHeightCm);
+      else if (p.first == "full_distance_cm") valid = parseHcsr04Int(text, cfg.fullDistanceCm);
       if (!valid) {
         web.send(400, "application/json", "{\"ok\":false,\"error\":\"invalid parameter value\"}");
         return;
@@ -1369,14 +1366,17 @@ static void handleHcsr04() {
       return;
     }
     if (cfg.minHeightCm >= cfg.maxHeightCm || cfg.maxHeightCm > 400 ||
+        cfg.fullDistanceCm >= cfg.maxHeightCm ||
         cfg.alertHeightCm < cfg.minHeightCm || cfg.alertHeightCm > cfg.maxHeightCm) {
-      web.send(400, "application/json", "{\"ok\":false,\"error\":\"heights must satisfy min <= alert <= max and max <= 400 cm\"}");
+      web.send(400, "application/json", "{\"ok\":false,\"error\":\"heights must satisfy min <= alert <= max <= 400 cm and full distance < max\"}");
       return;
     }
 
     char serialized[48];
-    snprintf(serialized, sizeof(serialized), "%d,%d,%d,%d,%d,%d", cfg.enabled ? 1 : 0, cfg.triggerPin,
-             cfg.echoPin, cfg.minHeightCm, cfg.maxHeightCm, cfg.alertHeightCm);
+    if (!firenet::hcsr04SerializeConfig(cfg, serialized, sizeof(serialized))) {
+      web.send(500, "application/json", "{\"ok\":false,\"error\":\"configuration could not be serialized\"}");
+      return;
+    }
     prefs.begin("firenet", false);
     const bool saved = prefs.getString("hcsr_cfg", "") == serialized || prefs.putString("hcsr_cfg", serialized) != 0;
     prefs.end();
@@ -1399,7 +1399,8 @@ static void handleHcsr04() {
     + ",\"enabled\":" + (cfg.enabled ? "true" : "false")
     + ",\"trigger_pin\":" + cfg.triggerPin + ",\"echo_pin\":" + cfg.echoPin
     + ",\"min_height_cm\":" + cfg.minHeightCm + ",\"max_height_cm\":" + cfg.maxHeightCm
-    + ",\"alert_height_cm\":" + cfg.alertHeightCm + ",\"valid\":" + (reading.valid ? "true" : "false")
+    + ",\"alert_height_cm\":" + cfg.alertHeightCm + ",\"full_distance_cm\":" + cfg.fullDistanceCm
+    + ",\"valid\":" + (reading.valid ? "true" : "false")
     + ",\"distance_cm\":" + (reading.valid ? String(reading.distanceCm, 1) : String("null"))
     + ",\"height_cm\":" + (reading.valid ? String(reading.heightCm, 1) : String("null"))
     + ",\"fill_percent\":" + (reading.valid ? String(reading.fillPercent) : String("null"))
@@ -2216,14 +2217,9 @@ void setup() {
   if (!hcsr04Saved.isEmpty()) {
     int enabled = 0;
     Hcsr04Config saved;
-    if (sscanf(hcsr04Saved.c_str(), "%d,%d,%d,%d,%d,%d", &enabled, &saved.triggerPin, &saved.echoPin,
-               &saved.minHeightCm, &saved.maxHeightCm, &saved.alertHeightCm) == 6 &&
-        (enabled == 0 || enabled == 1) &&
+    if (firenet::hcsr04ParseConfig(hcsr04Saved.c_str(), saved) &&
         saved.triggerPin != saved.echoPin && hcsr04PinValid(saved.triggerPin, true) &&
-        hcsr04PinValid(saved.echoPin, false) && saved.minHeightCm < saved.maxHeightCm &&
-        saved.maxHeightCm <= 400 && saved.alertHeightCm >= saved.minHeightCm &&
-        saved.alertHeightCm <= saved.maxHeightCm) {
-      saved.enabled = enabled == 1;
+        hcsr04PinValid(saved.echoPin, false)) {
       g_hcsr04Cfg = saved;
     } else {
       DBG.println("[hcsr04] invalid saved configuration; using defaults");
